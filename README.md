@@ -8,6 +8,14 @@ Concepts used:
 
 ## Setup
 
+1. Install dependencies for main application
+
+```bash
+uv sync
+```
+
+## Running the application
+
 1. Start Kafka container
 
 ```bash
@@ -35,6 +43,7 @@ uv run uvicorn main:app --port 8080
 
 - Add Redis docker container and make use of the idempotency key
 - Add Postgres container to do atomic transactions and saga pattern
+- Dockerize main application
 
 ## Known issues
 
