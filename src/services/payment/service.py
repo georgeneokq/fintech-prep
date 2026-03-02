@@ -1,3 +1,4 @@
+import os
 import logging
 import json
 from typing import Optional
@@ -8,6 +9,7 @@ from fastapi.responses import Response
 from services.base_service import BaseService
 from services.payment.types import Currency
 from uuid import uuid4
+from rate_limit.circuit_breaker import payment_circuit_breaker
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,7 @@ class PaymentService(BaseService):
             cls.instance = PaymentService()
         return cls.instance
 
+    @payment_circuit_breaker
     async def process_payment(
         self,
         from_user: str,
@@ -48,6 +51,9 @@ class PaymentService(BaseService):
         currency: Currency,
         idempotency_key: str,
     ):
+        if bool(os.environ.get("TEST_CIRCUIT_BREAKER")):
+            raise Exception("Purposely raising exception to simulate failure")
+
         # Payment complete. Simulated. In actual, use idempotency key to prevent double payment.
         # Use base idempotency key, form a new one. In actual implementation, I expect to store the idempotency key in a database
         # for a safe amount of time, e.g. 10 minutes, to prevent double payment
@@ -86,13 +92,16 @@ class PaymentService(BaseService):
         to_user: str = body["to_user"]
         amount: float = body["amount"]
         currency: str = body["currency"]
+        base_idempotency_key = request.headers.get("X-Idempotency-Key")
         currency_enum_value = Currency(currency)
 
-        # TODO: Input error handling before prod
+        # Ensure there is idempotency key provided as measure against double transactions
+        if not base_idempotency_key:
+            return Response("Fatal error: X-Idempotency-Key not provided", status_code=400)
+
+        # TODO: Better input error handling before prod
 
         # Send payment
-        # Idempotency key to prevent duplicate Payment, SMS
-        base_idempotency_key = f"{from_user}_{uuid4()}"
         payment_service = await PaymentService.get_instance()
         await payment_service.process_payment(
             from_user=from_user,

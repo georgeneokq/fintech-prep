@@ -7,6 +7,7 @@ from confluent_kafka.aio import AIOConsumer
 from confluent_kafka import Message
 from fastapi import FastAPI
 from services.base_service import BaseService
+from rate_limit.circuit_breaker import sms_circuit_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,7 @@ class SMSService(BaseService):
                             # Send SMS
                             user_id = sms_data["from"]
                             sms_contents = f"You have received {sms_data['amount']}{sms_data['currency']} from User {user_id}."
-                            self.send_sms(user_id, sms_contents)
+                            await self.send_sms(user_id, sms_contents)
 
                         # Tell Kafka that we are done with this message
                         await self.consumer.commit(message=message, asynchronous=True)
@@ -133,7 +134,8 @@ class SMSService(BaseService):
             # Let FastAPI take care of unsubscribe
             self.running = False
 
-    def send_sms(self, recipient_user_id: str, message: str):
+    @sms_circuit_breaker
+    async def send_sms(self, recipient_user_id: str, message: str):
         # Simulated SMS
         success_message = f"SMS sent to User {recipient_user_id}: {message}"
         logger.info(success_message)
